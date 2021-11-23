@@ -1,136 +1,105 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# serialize  data\n",
-    "import json\n",
-    "import boto3\n",
-    "import base64\n",
-    "\n",
-    "s3 = boto3.client('s3')\n",
-    "\n",
-    "BUCKET_NAME = 'sagemaker-workflow2' # bucket name\n",
-    "\n",
-    "\n",
-    "def lambda_handler(event, context):\n",
-    "    \"\"\"A function to serialize target data from S3\"\"\"\n",
-    "\n",
-    "    # Get the s3 address from the Step Function event input\n",
-    "    key = event['s3_input_uri']\n",
-    "    bucket = BUCKET_NAME\n",
-    "    # Download the data from s3 to /tmp/image.png\n",
-    "    file_name = '/tmp/image.png'\n",
-    "    \n",
-    "    s3.download_file(bucket,key, file_name)\n",
-    "    \n",
-    "    # We read the data from a file\n",
-    "    with open(\"/tmp/image.png\", \"rb\") as f:\n",
-    "        image_data = base64.b64encode(f.read())\n",
-    "\n",
-    "    # Pass the data back to the Step Function\n",
-    "    print(\"Event:\", event.keys())\n",
-    "    return {\n",
-    "        'statusCode': 200,\n",
-    "        'body': {\n",
-    "            \"image_data\": image_data,\n",
-    "            \"s3_bucket\": bucket,\n",
-    "            \"s3_key\": key,\n",
-    "            \"inferences\": []\n",
-    "        }\n",
-    "    }\n",
-    "\n",
-    "\n",
-    "# classification function\n",
-    "import json\n",
-    "import sagemaker\n",
-    "import base64\n",
-    "from sagemaker.serializers import IdentitySerializer\n",
-    "\n",
-    "ENDPOINT = \"image-classification-2021-11-14-03-08-32-250\" # name of endpoint to use\n",
-    "\n",
-    "def lambda_handler(event, context):\n",
-    "\n",
-    "    # Decode the image data\n",
-    "    image = base64.b64decode(event['image_data'])\n",
-    "    endpoint = ENDPOINT\n",
-    "    # Instantiate a Predictor\n",
-    "    predictor = sagemaker.predictor.Predictor(\n",
-    "    endpoint,\n",
-    "    sagemaker_session=sagemaker.Session(),\n",
-    "    )\n",
-    "\n",
-    "    # For this model the IdentitySerializer needs to be \"image/png\"\n",
-    "    predictor.serializer = IdentitySerializer(\"image/png\")\n",
-    "\n",
-    "    # Make a prediction:\n",
-    "    inferences = predictor.predict(image)\n",
-    "\n",
-    "    # We return the data back to the Step Function    \n",
-    "    event['inferences'] = inferences.decode('utf-8')\n",
-    "    \n",
-    "    return {\n",
-    "        'statusCode': 200,\n",
-    "        'body': {\n",
-    "            \"inferences\": event['inferences']\n",
-    "            \n",
-    "        }\n",
-    "    }\n",
-    "#EOF\n",
-    "\n",
-    "\n",
-    "# threshold inference function\n",
-    "THRESHOLD = 0.97\n",
-    "\n",
-    "\n",
-    "def lambda_handler(event, context):\n",
-    "    meets_threshold = None\n",
-    "    # Grab the inferences from the event\n",
-    "    inferences = json.loads(event['inferences'])\n",
-    "    # Check if any values in our inferences are above THRESHOLD\n",
-    "    for ifer in inferences:\n",
-    "        if infer > THRESHOLD:\n",
-    "            meets_threshold = True\n",
-    "    \n",
-    "    # If our threshold is met, pass our data back out of the\n",
-    "    # Step Function, else, end the Step Function with an error\n",
-    "    if meets_threshold:\n",
-    "        pass\n",
-    "    else:\n",
-    "        raise Exception(\"THRESHOLD_CONFIDENCE_NOT_MET\")\n",
-    "\n",
-    "    return {\n",
-    "        'statusCode': 200,\n",
-    "        'body': json.dumps(event)\n",
-    "    }\n",
-    "\n",
-    "#EOF"
-   ]
-  }
- ],
- "metadata": {
-  "instance_type": "ml.t3.medium",
-  "kernelspec": {
-   "display_name": "Python 3 (Data Science)",
-   "language": "python",
-   "name": "python3__SAGEMAKER_INTERNAL__arn:aws:sagemaker:us-east-1:081325390199:image/datascience-1.0"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.7.10"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 4
-}
+# serialize image function
+import json
+import boto3
+import base64
+
+s3 = boto3.client('s3')
+
+BUCKET_NAME = 'sagemaker-workflow2' # bucket name
+
+
+def lambda_handler(event, context):
+    """A function to serialize target data from S3"""
+
+    # Get the s3 address from the Step Function event input
+    key = event['s3_input_uri']
+    bucket = BUCKET_NAME
+    # Download the data from s3 to /tmp/image.png
+    file_name = '/tmp/image.png'
+    
+    s3.download_file(bucket,key, file_name)
+    
+    # We read the data from a file
+    with open("/tmp/image.png", "rb") as f:
+        image_data = base64.b64encode(f.read())
+
+    # Pass the data back to the Step Function
+    print("Event:", event.keys())
+    return {
+        'statusCode': 200,
+        'body': {
+            "image_data": image_data,
+            "s3_bucket": bucket,
+            "s3_key": key,
+            "inferences": []
+        }
+    }
+#EOF
+
+
+# classify images function 
+import json
+import sagemaker
+import base64
+from sagemaker.serializers import IdentitySerializer
+
+ENDPOINT = "image-classification-2021-11-14-03-08-32-250" # name of endpoint to use
+
+def lambda_handler(event, context):
+
+    # Decode the image data
+    image = base64.b64decode(event['image_data'])
+    endpoint = ENDPOINT
+    # Instantiate a Predictor
+    predictor = sagemaker.predictor.Predictor(
+    endpoint,
+    sagemaker_session=sagemaker.Session(),
+    )
+
+    # For this model the IdentitySerializer needs to be "image/png"
+    predictor.serializer = IdentitySerializer("image/png")
+
+    # Make a prediction:
+    inferences = predictor.predict(image)
+
+    # We return the data back to the Step Function    
+    event['inferences'] = inferences.decode('utf-8')
+    
+    return {
+        'statusCode': 200,
+        'body': {
+            "inferences": event['inferences']
+            
+        }
+    }
+#EOF
+
+# check confidence threshold
+import json
+
+THRESHOLD = 0.97
+
+
+def lambda_handler(event, context):
+    meets_threshold = None
+    # Grab the inferences from the event
+    inferences = json.loads(event['inferences'])
+    # Check if any values in our inferences are above THRESHOLD
+    for ifer in inferences:
+        if infer > THRESHOLD:
+            meets_threshold = True
+    
+    # If our threshold is met, pass our data back out of the
+    # Step Function, else, end the Step Function with an error
+    if meets_threshold:
+        pass
+    else:
+        raise Exception("THRESHOLD_CONFIDENCE_NOT_MET")
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps(event)
+    }
+
+#EOF
+
